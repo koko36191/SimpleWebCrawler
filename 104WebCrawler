@@ -1,0 +1,125 @@
+import requests
+import json
+import pandas
+from bs4 import BeautifulSoup
+
+
+
+def getJobsDetail(jobsurl):
+    #使用假header(沒有假header時，被網頁擋住不能讀取)
+    result1={}
+    headers = {'user-agent': 'Mozilla/5.0 (Windows NT 6.1) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/52.0.2743.116 Safari/537.36'}
+    jburl = jobsurl.strip() 
+    re = requests.get(jburl, headers=headers)
+    #把預設編碼(ISO)改成utf8才能解碼
+    re.encoding = 'utf8'
+    #print(re.text)
+    soup = BeautifulSoup(re.text,'html.parser')
+    
+    #網址(查詢用)
+    result1['網址'] = jobsurl
+
+    #title(需要)
+    k = soup.select('.center h1')[0].text
+    k1 = k.strip()
+    result1['工作名稱'] = k1
+    
+    #k = soup.find('logoTitle','h1')
+    
+
+    #網址(需要網址內的產業別)
+    counter = 0
+    for c1 in soup.select('.company a'):
+        if c1.has_attr('href'):
+            cweb = c1['href']
+            #print(cweb)
+            break
+    headers = {'user-agent': 'Mozilla/5.0 (Windows NT 6.1) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/52.0.2743.116 Safari/537.36'}
+    corre = requests.get(cweb, headers=headers)
+    #把預設編碼(ISO)改成utf8才能解碼
+    corre.encoding = 'utf8'
+    #print(re.text)
+    corsoup = BeautifulSoup(corre.text,'html.parser')
+    if corsoup.select('#cont_main .intro dl'):
+        result1['產業別'] = corsoup.select('#cont_main .intro dl')[0].text
+    else:
+        result1['產業別'] = " "
+    #print(corsoup.select('#cont_main .intro dl')[0].text)
+    #if dlen>0:
+        #result1['產業別'] = corsoup.select('#cont_main .intro dl dd')[0].text
+    #else:
+        #result1['產業別'] = " "
+
+    #薪資
+    t = soup.select('.salary')[0].text
+    #t1 = soup.select('.listContent')[3].text
+    new_t = filter(str.isdigit,t)
+    #new_t1 = filter(str.isdigit,t1)
+    #result1['新資'] = t
+    result1['新資'] =''.join(list(new_t))
+    
+
+    #地點條件(抓取前三字*需要)
+    l= soup.select('.addr')[0].text
+    result1['縣市'] = l[41:44]
+
+    #學歷條件(學士*需要)
+    s =soup.select('.info .content dl dd')[12].text
+    k ="學士"
+    if s.find("學")!=-1:
+        k = "學士"
+    elif s.find("碩")!=-1:
+        k = "碩士"   
+    result1['學歷(學士/碩士)'] = k
+    #(學群、經驗*判斷)
+    result1['學群']=soup.select('.info .content dl dd')[13].text
+    result1['工作經驗']=soup.select('.info .content dl dd')[11].text
+
+
+    #工作內容(可能出現工作經驗*判斷)
+    content = []
+    for p in soup.select('.content p'):
+        content.append(p.text.strip())
+    result1['工作內容'] = content
+    #print(content)
+    
+    return result1
+#print(getJobsDetail('https://www.104.com.tw/job/?jobno=6hn2m&jobsource=hotjob_chr'))
+
+def parseListLinks(url):
+    jobsdetail1=[]
+    #jobsdetail2=[]
+    headers = {'user-agent': 'Mozilla/5.0 (Windows NT 6.1) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/52.0.2743.116 Safari/537.36'}
+    res2 = requests.get(url, headers=headers)
+    #把預設編碼(ISO)改成utf8才能解碼
+    res2.encoding = 'utf8'
+    soup2 = BeautifulSoup(res2.text,'html.parser')
+    count = 0
+    #變形=.=
+    for jobinfo in soup2.select(".js-job-link"):
+        #if jobinfo['href'].find('company')==-1:
+        #count = count+1
+        jobweb1 = ["http:",jobinfo['href']]
+        detailurl1 = ''.join(jobweb1)
+        #print(detailurl1)
+        #print(jobweb1)
+        jobsdetail1.append(getJobsDetail(detailurl1))
+    return jobsdetail1
+    #print (count)
+#parseListLinks('https://www.104.com.tw/jobs/search/?ro=1&jobcat=2007000000&order=11&asc=0&page=1&mode=s&jobsource=2018indexpoc')
+
+finalurl = 'https://www.104.com.tw/jobs/search/?ro=1&jobcat=2009003002%2C2011001005&order=11&asc=0&page={}&mode=s&jobsource=2018indexpoc'
+jobs_total = []
+for i in range(1,121):
+    print(i)
+    urls = finalurl.format(i)
+    #print(urls)
+    jobsary = parseListLinks(urls)
+    jobs_total.extend(jobsary)
+    #print("1")
+#print(len(jobs_total))
+#print(jobs_total) 
+df = pandas.DataFrame(jobs_total)
+#print(df)
+df.to_excel("0606104p7.xlsx")
+
